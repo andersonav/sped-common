@@ -39,7 +39,8 @@ class SoapFake extends SoapBase implements SoapInterface
         $parameters = [],
         $namespaces = [],
         $request = '',
-        $soapheader = null
+        $soapheader = null,
+        $utilizaMicroS = 0
     ) {
         $envelope = $this->makeEnvelopeSoap(
             $request,

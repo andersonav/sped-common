@@ -130,6 +130,7 @@ interface SoapInterface
         $parameters = [],
         $namespaces = [],
         $request = '',
-        $soapheader = null
+        $soapheader = null,
+        $utilizaMicroS = 0
     );
 }

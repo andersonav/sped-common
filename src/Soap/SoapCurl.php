@@ -54,7 +54,8 @@ class SoapCurl extends SoapBase implements SoapInterface
         $parameters = [],
         $namespaces = [],
         $request = '',
-        $soapheader = null
+        $soapheader = null,
+        $utilizaMicroS = 0
     ) {
         //check or create key files
         //before send request
@@ -77,51 +78,138 @@ class SoapCurl extends SoapBase implements SoapInterface
         $this->requestHead = implode("\n", $parameters);
         $this->requestBody = $envelope;
         try {
-            $oCurl = curl_init();
-            $this->setCurlProxy($oCurl);
-            curl_setopt($oCurl, CURLOPT_URL, $url);
-            curl_setopt($oCurl, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4);
-            curl_setopt($oCurl, CURLOPT_CONNECTTIMEOUT, $this->soaptimeout);
-            curl_setopt($oCurl, CURLOPT_TIMEOUT, $this->soaptimeout + 20);
-            curl_setopt($oCurl, CURLOPT_HEADER, 1);
-            curl_setopt($oCurl, CURLOPT_HTTP_VERSION, $this->httpver);
-            curl_setopt($oCurl, CURLOPT_SSL_VERIFYHOST, 0);
-            curl_setopt($oCurl, CURLOPT_SSL_VERIFYPEER, 0);
-            if (!empty($this->security_level)) {
-                curl_setopt($oCurl, CURLOPT_SSL_CIPHER_LIST, "{$this->security_level}");
-            }
-            if (!$this->disablesec) {
-                curl_setopt($oCurl, CURLOPT_SSL_VERIFYHOST, 2);
-                if (!empty($this->casefaz)) {
-                    if (is_file($this->casefaz)) {
-                        curl_setopt($oCurl, CURLOPT_CAINFO, $this->casefaz);
+            
+            if ($utilizaMicroS == 1) {
+
+                $microserviceUrl = 'https://hub.gcweb.app.br/proxy/execute';
+
+                $payload = array(
+                    'url' => $url,
+                    'data' => $envelope,
+
+                    'certificados' => array(
+                        'certBase64' => base64_encode(file_get_contents($this->tempdir . $this->certfile)),
+                        'keyBase64'  => base64_encode(file_get_contents($this->tempdir . $this->prifile)),
+                        'caBase64'   => (!empty($this->casefaz) && is_file($this->casefaz))
+                            ? base64_encode(file_get_contents($this->casefaz))
+                            : null,
+                        'senha'      => !empty($this->temppass) ? $this->temppass : null,
+                    ),
+
+                    'headers' => $parameters,
+
+                    'options' => array(
+                        'ipresolve'        => 'v4',
+                        'connect_timeout'  => $this->soaptimeout,
+                        'timeout'          => $this->soaptimeout + 20,
+                        'http_version'     => '1.1',
+                        'ssl_verifyhost'   => $this->disablesec ? 0 : 2,
+                        'ssl_verifypeer'   => 0,
+                        'ssl_protocol'     => $this->soapprotocol,
+                        'security_level'   => !empty($this->security_level) ? $this->security_level : null,
+                    ),
+                );
+
+                $oCurl = curl_init($microserviceUrl);
+
+                curl_setopt($oCurl, CURLOPT_POST, 1);
+                curl_setopt($oCurl, CURLOPT_POSTFIELDS, json_encode(
+                    $payload,
+                    JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE
+                ));
+
+                curl_setopt($oCurl, CURLOPT_HTTPHEADER, array(
+                    'Content-Type: application/json',
+                    'Accept: application/json',
+                ));
+
+                curl_setopt($oCurl, CURLOPT_CONNECTTIMEOUT, $this->soaptimeout);
+                curl_setopt($oCurl, CURLOPT_TIMEOUT, $this->soaptimeout + 30);
+                curl_setopt($oCurl, CURLOPT_RETURNTRANSFER, 1);
+                curl_setopt($oCurl, CURLOPT_HEADER, 1);
+
+            } else {
+
+                $oCurl = curl_init();
+
+                $this->setCurlProxy($oCurl);
+                curl_setopt($oCurl, CURLOPT_URL, $url);
+                curl_setopt($oCurl, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4);
+                curl_setopt($oCurl, CURLOPT_CONNECTTIMEOUT, $this->soaptimeout);
+                curl_setopt($oCurl, CURLOPT_TIMEOUT, $this->soaptimeout + 20);
+                curl_setopt($oCurl, CURLOPT_HEADER, 1);
+                curl_setopt($oCurl, CURLOPT_HTTP_VERSION, $this->httpver);
+                curl_setopt($oCurl, CURLOPT_SSL_VERIFYHOST, 0);
+                curl_setopt($oCurl, CURLOPT_SSL_VERIFYPEER, 0);
+
+                if (!empty($this->security_level)) {
+                    curl_setopt($oCurl, CURLOPT_SSL_CIPHER_LIST, "{$this->security_level}");
+                }
+
+                if (!$this->disablesec) {
+                    curl_setopt($oCurl, CURLOPT_SSL_VERIFYHOST, 2);
+
+                    if (!empty($this->casefaz)) {
+                        if (is_file($this->casefaz)) {
+                            curl_setopt($oCurl, CURLOPT_CAINFO, $this->casefaz);
+                        }
                     }
                 }
+
+                curl_setopt($oCurl, CURLOPT_SSLVERSION, $this->soapprotocol);
+                curl_setopt($oCurl, CURLOPT_SSLCERT, $this->tempdir . $this->certfile);
+                curl_setopt($oCurl, CURLOPT_SSLKEY, $this->tempdir . $this->prifile);
+
+                if (!empty($this->temppass)) {
+                    curl_setopt($oCurl, CURLOPT_KEYPASSWD, $this->temppass);
+                }
+
+                curl_setopt($oCurl, CURLOPT_RETURNTRANSFER, 1);
+
+                if (!empty($envelope)) {
+                    curl_setopt($oCurl, CURLOPT_POST, 1);
+                    curl_setopt($oCurl, CURLOPT_POSTFIELDS, $envelope);
+                    curl_setopt($oCurl, CURLOPT_HTTPHEADER, $parameters);
+                }
             }
-            curl_setopt($oCurl, CURLOPT_SSLVERSION, $this->soapprotocol);
-            curl_setopt($oCurl, CURLOPT_SSLCERT, $this->tempdir . $this->certfile);
-            curl_setopt($oCurl, CURLOPT_SSLKEY, $this->tempdir . $this->prifile);
-            if (!empty($this->temppass)) {
-                curl_setopt($oCurl, CURLOPT_KEYPASSWD, $this->temppass);
-            }
-            curl_setopt($oCurl, CURLOPT_RETURNTRANSFER, 1);
-            if (!empty($envelope)) {
-                curl_setopt($oCurl, CURLOPT_POST, 1);
-                curl_setopt($oCurl, CURLOPT_POSTFIELDS, $envelope);
-                curl_setopt($oCurl, CURLOPT_HTTPHEADER, $parameters);
-            }
+
             $response = curl_exec($oCurl);
+
             $this->soaperror = curl_error($oCurl);
             $this->soaperror_code = curl_errno($oCurl);
+
             $ainfo = curl_getinfo($oCurl);
+
             if (is_array($ainfo)) {
                 $this->soapinfo = $ainfo;
             }
+
             $headsize = curl_getinfo($oCurl, CURLINFO_HEADER_SIZE);
             $httpcode = curl_getinfo($oCurl, CURLINFO_HTTP_CODE);
+
             curl_close($oCurl);
+
             $this->responseHead = trim(substr($response, 0, $headsize));
             $this->responseBody = trim(substr($response, $headsize));
+
+            if ($utilizaMicroS == 1) {
+
+                $retProxy = json_decode($this->responseBody);
+
+                if (isset($retProxy->retorno)) {
+
+                    $this->responseHead = isset($retProxy->retorno->head)
+                        ? trim($retProxy->retorno->head)
+                        : '';
+
+                    $this->responseBody = isset($retProxy->retorno->body)
+                        ? trim($retProxy->retorno->body)
+                        : '';
+                } else {
+                    throw SoapException::soapFault('Documento não processado por instabilidade no microserviço.', 99);
+                }
+            }
+
             $this->saveDebugFiles(
                 $operation,
                 $this->requestHead . "\n" . $this->requestBody,

@@ -61,7 +61,8 @@ class SoapNative extends SoapBase implements SoapInterface
         $parameters = [],
         $namespaces = [],
         $request = '',
-        $soapheader = null
+        $soapheader = null,
+        $utilizaMicroS = 0
     ) {
         $this->prepare($url, $soapver);
         try {
